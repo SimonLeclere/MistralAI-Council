@@ -1,65 +1,160 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Heart } from 'lucide-react';
+
+import ChatInput from '@/components/ChatInput';
+import CouncilView from '@/components/CouncilView';
+import DitheredBackground from '@/components/DitheredBackground';
 
 export default function Home() {
+  const [isLoading, setIsLoading] = useState(false);
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [currentTopic, setCurrentTopic] = useState('');
+  const [gradientTargetY, setGradientTargetY] = useState(0);
+  const [textYPosition, setTextYPosition] = useState(0);
+
+  // When data is loaded, scroll so that the user's question is at the top of the screen
+  // Also, adjust gradient target position to just below the text so the text is readable
+  useEffect(() => {
+    if (data && textYPosition > 0) {
+      window.scrollTo({
+        top: textYPosition - 60,
+        behavior: 'smooth'
+      });
+      
+      const textHeight = 7 * 4 * 2;
+      setGradientTargetY(textYPosition + textHeight + 80);
+    }
+  }, [data, textYPosition]);
+
+  // Update text position on mount and resize
+  useEffect(() => {
+    const updateTextPosition = () => {
+      setTextYPosition(window.innerHeight * 0.65);
+    };
+    
+    updateTextPosition();
+    window.addEventListener('resize', updateTextPosition);
+    return () => window.removeEventListener('resize', updateTextPosition);
+  }, []);
+
+  const handleTopicSubmit = async (topic: string) => {
+    setIsLoading(true);
+    setError('');
+    setData(null);
+    setCurrentTopic(topic);
+    setGradientTargetY(0);
+
+    try {
+      const response = await fetch('/api/council', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ topic }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to summon the council');
+      }
+
+      const result = await response.json();
+      setData(result);
+    } catch (err) {
+      setError('The Council is silent. Please try again.');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <main className="min-h-screen text-mistral-dark font-sans selection:bg-mistral-yellow/30 overflow-x-hidden">
+      <DitheredBackground 
+        isLoading={isLoading} 
+        revealText={currentTopic}
+        textYPosition={textYPosition}
+        gradientTargetY={gradientTargetY}
+      />
+      
+      {/* Header section */}
+      <div className="relative h-[50vh] flex flex-col items-center justify-center text-white z-10">
+        <motion.h1 
+          className="text-5xl md:text-7xl font-black mb-6 tracking-tight text-center px-4"
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          style={{ 
+            textShadow: '4px 4px 0 rgba(0,0,0,0.2)',
+            fontFamily: 'system-ui, -apple-system, sans-serif'
+          }}
+        >
+          The Council of Wisdom
+        </motion.h1>
+        
+        <motion.p 
+          className="text-lg md:text-xl text-white/90 max-w-2xl mx-auto text-center px-4 leading-relaxed"
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
+        >
+          Summon a council of historical and fictional minds to debate your questions.
+        </motion.p>
+      </div>
+
+      {/* Content */}
+      <div className="relative z-20 container mx-auto px-4" style={{ paddingBottom: data ? '5rem' : '0' }}>
+        
+        <motion.div 
+          className="max-w-2xl mx-auto"
+          style={{ marginBottom: data ? '4rem' : '2rem' }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.8 }}
+        >
+          <ChatInput onSubmit={handleTopicSubmit} isLoading={isLoading} />
+          {error && (
+            <motion.div 
+              className="bg-red-50 text-red-600 border-2 border-red-200 p-4 mt-4 text-center text-sm font-bold"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+              {error}
+            </motion.div>
+          )}
+        </motion.div>
+
+        <div className="flex-1">
+          <AnimatePresence mode="wait">
+            {data && <CouncilView key="content" data={data} />}
+          </AnimatePresence>
+        </div>
+
+        {/* Footer */}
+        {data && (
+        <footer className="text-center py-12 mt-20 border-t-2 border-dashed border-gray-200">
+          <p className="text-gray-400 text-sm font-medium tracking-wide flex items-center justify-center gap-1">
+            Built with
+            <Heart className="w-4 h-4 text-red-500 inline-block" aria-hidden="true" />
+            using Next.js & Mistral AI
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+          <div className="mt-4 flex items-center justify-center gap-1">
+            {[...Array(30)].map((_, i) => (
+              <div 
+                key={i} 
+                className="w-1 h-1"
+                style={{ 
+                  backgroundColor: i % 3 === 0 ? '#F05822' : i % 3 === 1 ? '#FDB913' : '#ddd'
+                }}
+              />
+            ))}
+          </div>
+        </footer>
+        )}
+      </div>
+    </main>
   );
 }
